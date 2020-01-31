@@ -21,25 +21,7 @@ def load_data(path):
                 obj = json.loads(line.strip())
                 if not obj is None:
                     map_lst.append(obj)
-    return pd.DataFrame(map_lst) 
-
-def set_category_row(row, categories_in):
-    def label_race(row):
-        if row['eri_hispanic'] == 1:
-            return 'Hispanic'
-        if row['eri_afr_amer'] + row['eri_asian'] + row['eri_hawaiian'] + row['eri_nat_amer'] + row['eri_white'] > 1:
-            return 'Two Or More'
-        if row['eri_nat_amer'] == 1:
-            return 'A/I AK Native'
-        if row['eri_asian'] == 1:
-            return 'Asian'
-        if row['eri_afr_amer'] == 1:
-            return 'Black/AA'
-        if row['eri_hawaiian'] == 1:
-            return 'Haw/Pac Isl.'
-        if row['eri_white'] == 1:
-            return 'White'
-        return 'Other'
+    return pd.DataFrame(map_lst)
     
 if __name__ == '__main__':
     #Load dataset into a Pandas dataframe
@@ -49,11 +31,11 @@ if __name__ == '__main__':
     #Remove homepage events
     print('Removing homepage hits from datatset.')
     df = df[df.url != 'http://adressa.no']
-
+    '''
     #remove 404s
     print('Removing 404 articles.')
     df = df.replace(to_replace='None', value=np.nan).dropna(subset=['documentId'])
-
+    '''
     #binarize categories
     print('Binarizing categories')
     categories_df = df['category'].str.split('|', expand=True)
@@ -66,14 +48,3 @@ if __name__ == '__main__':
     #Print final dataframe
     print('Printing final dataframe')
     print(df)
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
