@@ -31,11 +31,11 @@ if __name__ == '__main__':
     #Remove homepage events
     print('Removing homepage hits from datatset.')
     df = df[df.url != 'http://adressa.no']
-    '''
-    #remove 404s
-    print('Removing 404 articles.')
+
+    #remove incorrectly scraped events
+    print('Removing incorrectly events.')
     df = df.replace(to_replace='None', value=np.nan).dropna(subset=['documentId'])
-    '''
+
     #binarize categories
     print('Binarizing categories')
     categories_df = df['category'].str.split('|', expand=True)
