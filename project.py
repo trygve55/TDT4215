@@ -1,5 +1,7 @@
 import json
 import os
+
+from sklearn.metrics.pairwise import cosine_similarity
 from tqdm import tqdm
 import pandas as pd
 import numpy as np
@@ -22,29 +24,90 @@ def load_data(path):
                 if not obj is None:
                     map_lst.append(obj)
     return pd.DataFrame(map_lst)
+
+
+def binarize_categories(df):
+    print('Binarizing categories')
+    categories_df = df['category'].str.split('|', expand=True)
+    categories = pd.unique(categories_df.values.ravel('K'))
+    categories = categories[categories != None]  # Remove none from categories
+    for i in tqdm(categories):
+        df['category_' + i] = np.where(i in categories_df, 1, 0)
+    df = df.drop(['category'], axis=1)
+    return df
+
+
+def pre_processing(df):
+    # Remove homepage events and events without an article
+    print('Removing homepage hits from datatset')
+    df.dropna(subset=["documentId"], inplace=True)
+
+    print("Removing duplicates")
+    df.drop_duplicates(subset=["userId", "documentId"], inplace=True)
+
+    print("Sort by user and time")
+    df = df.sort_values(by=["userId", "time"])
+
+    # remove incorrectly scraped events COMBINED WITH THE FRONTPAGE ARTICLES
+    # print('Removing incorrectly events.')
+    # df = df.replace(to_replace='None', value=np.nan).dropna(subset=['documentId'])
+
+    # Print final dataframe
+    print('Printing final dataframe')
+    print(df)
+    return df
+
+def get_ratings_matrix(df):
+    num_users = df["userId"].nunique()
+    num_items = df["documentId"].nunique()
+
+    ### Note that this part is equal to the implementation in the project example ###
+    ratings = np.zeros((num_users, num_items))
+    new_user = df['userId'].values[1:] != df['userId'].values[:-1]
+    new_user = np.r_[True, new_user]
+    df['uid'] = np.cumsum(new_user)
+    item_ids = df['documentId'].unique().tolist()
+    new_df = pd.DataFrame({'documentId': item_ids, 'tid': range(1, len(item_ids) + 1)})
+    df = pd.merge(df, new_df, on='documentId', how='outer')
+    df_ext = df[['uid', 'tid']]
+
+    for row in df_ext.itertuples():
+        ratings[row[1]-1, row[2]-1] = 1.0
+    print(ratings)
+    return ratings
+
+def user_based_collab_filtering(ratings, k):
+    cosine_sim = cosine_similarity(ratings, ratings)  # Cosine sim instead of linear kernel to get normalized values
+    ind = np.flip(np.argsort(cosine_sim, axis=1), 1)  # Get the indices of the most similar users for each users sorted
+    # print(ind)
+    #sim = np.take_along_axis(cosine_sim, ind, axis=1)  # Get the sim values for the most similar users
+    ind_k = np.delete(ind, 0, 1)  # The first row corresponds to the user itself so remove it
+    ind_k = np.delete(ind_k, slice(k, None), 1)  # We are only looking at the k most similar, so remove to less similar users
+    # print(ind_k)
+
+    recommendations = np.empty((ratings.shape[0], k))
+    for user in range(ratings.shape[0]):  # Find recommendations for every user
+        relevant_documents = []
+        for document in range(ratings.shape[1]):  # Look at every document to see how relevant it is
+            if ratings[user, document] == 0:  # If the user has seen the document before, it should not be recommended
+                value = 0
+                for sim_user in ind_k[user]:  # Look at the k most similar users
+                    if ratings[sim_user, document] == 1:  # If the similar user has seen the document it is likely relevant to the current user
+                        value += cosine_sim[user, sim_user]  # Add the similarity value between the users as the value used to rank the document
+                relevant_documents.append((document, value))  # Append both the document index and the value for the document
+        relevant_documents = sorted(relevant_documents, key=lambda x: x[1], reverse=True)  # Sort the documents based on the value
+        relevant_documents = relevant_documents[:k]  # Keep only the k most relevant
+        relevant_documents = [i for i, j in relevant_documents]  # Drop the value to keep only the documents
+        recommendations[user] = np.array(relevant_documents)
+
+    print(recommendations)
+    return recommendations
     
 if __name__ == '__main__':
     #Load dataset into a Pandas dataframe
     print('Loading dataset...')
-    df=load_data("active1000")
+    df = load_data("active1000")
 
-    #Remove homepage events
-    print('Removing homepage hits from datatset.')
-    df = df[df.url != 'http://adressa.no']
-
-    #remove incorrectly scraped events
-    print('Removing incorrectly events.')
-    df = df.replace(to_replace='None', value=np.nan).dropna(subset=['documentId'])
-
-    #binarize categories
-    print('Binarizing categories')
-    categories_df = df['category'].str.split('|', expand=True)
-    categories = pd.unique(categories_df.values.ravel('K'))
-    categories = categories[categories != None] #Remove none from categories
-    for i in tqdm(categories):
-        df['category_' + i] = np.where(i in categories_df, 1, 0)
-    df = df.drop(['category'], axis=1)
-
-    #Print final dataframe
-    print('Printing final dataframe')
-    print(df)
+    df = pre_processing(df)
+    ratings = get_ratings_matrix(df)
+    recommendations = user_based_collab_filtering(ratings, 20)
