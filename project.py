@@ -27,7 +27,9 @@ def load_data(path):
                 obj = json.loads(line.strip())
                 if not obj is None:
                     map_lst.append(obj)
-    return pd.DataFrame(map_lst)
+    df = pd.DataFrame(map_lst)
+    df.index.name = 'documentId'
+    return df
 
 
 if __name__ == '__main__':
