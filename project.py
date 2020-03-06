@@ -22,28 +22,35 @@ def load_data(path):
                 if not obj is None:
                     map_lst.append(obj)
     return pd.DataFrame(map_lst)
-    
+
+
+def prepare_data(df):
+    # Remove homepage events
+    print('Removing homepage hits from datatset.')
+    df = df[df.url != 'http://adressa.no']
+
+    # remove incorrectly scraped events
+    print('Removing incorrectly events.')
+    df = df.replace(to_replace='None', value=np.nan).dropna(subset=['documentId'])
+
+    # binarize categories
+    print('Binarizing categories')
+    categories_df = df['category'].str.split('|', expand=True)
+    categories = pd.unique(categories_df.values.ravel('K'))
+    categories = categories[categories != None]  # Remove none from categories
+    for i in tqdm(categories):
+        df['category_' + i] = np.where(i in categories_df, 1, 0)
+    df = df.drop(['category'], axis=1)
+
+    return df
+
+
 if __name__ == '__main__':
     #Load dataset into a Pandas dataframe
     print('Loading dataset...')
     df=load_data("active1000")
+    df=prepare_data(df)
 
-    #Remove homepage events
-    print('Removing homepage hits from datatset.')
-    df = df[df.url != 'http://adressa.no']
-
-    #remove incorrectly scraped events
-    print('Removing incorrectly events.')
-    df = df.replace(to_replace='None', value=np.nan).dropna(subset=['documentId'])
-
-    #binarize categories
-    print('Binarizing categories')
-    categories_df = df['category'].str.split('|', expand=True)
-    categories = pd.unique(categories_df.values.ravel('K'))
-    categories = categories[categories != None] #Remove none from categories
-    for i in tqdm(categories):
-        df['category_' + i] = np.where(i in categories_df, 1, 0)
-    df = df.drop(['category'], axis=1)
 
     #Print final dataframe
     print('Printing final dataframe')
