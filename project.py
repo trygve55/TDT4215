@@ -2,10 +2,16 @@ import json
 import os
 from tqdm import tqdm
 import pandas as pd
+from sklearn.cluster import KMeans
+import matplotlib.pyplot as plt
 import numpy as np
+from sklearn.decomposition import PCA
+
+
 pd.set_option('display.max_rows', 500)
 pd.set_option('display.max_columns', 500)
 pd.set_option('display.width', 240)
+
 
 def load_data(path):
     """
@@ -22,7 +28,8 @@ def load_data(path):
                 if not obj is None:
                     map_lst.append(obj)
     return pd.DataFrame(map_lst)
-    
+
+
 if __name__ == '__main__':
     #Load dataset into a Pandas dataframe
     print('Loading dataset...')
@@ -42,9 +49,33 @@ if __name__ == '__main__':
     categories = pd.unique(categories_df.values.ravel('K'))
     categories = categories[categories != None] #Remove none from categories
     for i in tqdm(categories):
-        df['category_' + i] = np.where(i in categories_df, 1, 0)
+        df['category_' + i] = np.where(i == categories_df[0], 1, np.where(i == categories_df[1], 1, 0))
     df = df.drop(['category'], axis=1)
 
     #Print final dataframe
     print('Printing final dataframe')
-    print(df)
+
+    df_cat_only = df.drop(['documentId', 'title', 'url', 'eventId', 'publishtime', 'userId', 'activeTime', 'time'], axis=1)
+
+    print(df_cat_only)
+
+    kmeans = KMeans(n_clusters=3).fit(df_cat_only)
+    centroids = kmeans.cluster_centers_
+    print(centroids)
+
+    pca = PCA(n_components=2).fit(df_cat_only)
+
+    print(pca)
+
+    pca_d = pca.transform(df_cat_only)
+    centroids_pca = pca.transform(centroids)
+
+    print(pca_d)
+
+    plt.scatter(pca_d[:, 0], pca_d[:, 1], c=kmeans.labels_.astype(float), s=50, alpha=0.5)
+    plt.scatter(centroids[:, 0], centroids[:, 1], c='red', s=50)
+
+    plt.show()
+
+
+
