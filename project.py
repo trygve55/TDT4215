@@ -2,6 +2,7 @@ import json
 import os
 
 from sklearn.metrics.pairwise import cosine_similarity
+from sklearn.metrics import mean_squared_error
 from tqdm import tqdm
 import pandas as pd
 import numpy as np
@@ -76,6 +77,38 @@ def get_ratings_matrix(df):
     print(ratings)
     return ratings
 
+def train_test_split(ratings):
+    test_set = np.zeros_like(ratings)
+    train_set = np.copy(ratings)
+
+    for i, user in enumerate(ratings):
+        num_test_docs = int(len(ratings[i].nonzero()[0]) * 0.2)
+        test_docs = np.random.choice(ratings[i].nonzero()[0], size=num_test_docs, replace=False)
+        train_set[i, test_docs] = 0.
+        test_set[i, test_docs] = 1.
+    return train_set, test_set
+
+def evaluate(recommendations, test_set):
+    recall = 0
+    ARHR = 0
+    CTR = 0
+    for user in range(recommendations.shape[0]):
+        correct_recommendations = np.intersect1d(recommendations[user], test_set[user].nonzero()[0])
+        recall += len(correct_recommendations) / len(test_set[user].nonzero()[0])
+        CTR += len(correct_recommendations)
+
+        for correct_recommendation in correct_recommendations:
+            ARHR += 1. / (recommendations[user].tolist().index(correct_recommendation) + 1)
+
+    recall = recall / recommendations.shape[0]
+    CTR = CTR / recommendations.shape[0]
+    ARHR = ARHR / recommendations.shape[0]
+    print(recall)
+    print(ARHR)
+    print(CTR)
+
+
+
 def user_based_collab_filtering(ratings, k):
     cosine_sim = cosine_similarity(ratings, ratings)  # Cosine sim instead of linear kernel to get normalized values
     ind = np.flip(np.argsort(cosine_sim, axis=1), 1)  # Get the indices of the most similar users for each users sorted
@@ -110,4 +143,6 @@ if __name__ == '__main__':
 
     df = pre_processing(df)
     ratings = get_ratings_matrix(df)
-    recommendations = user_based_collab_filtering(ratings, 20)
+    train_set, test_set = train_test_split(ratings)
+    recommendations = user_based_collab_filtering(train_set, 20)
+    evaluate(recommendations, test_set)
