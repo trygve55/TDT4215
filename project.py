@@ -3,6 +3,9 @@ import os
 from tqdm import tqdm
 import pandas as pd
 import numpy as np
+from sklearn.feature_extraction.text import TfidfVectorizer
+from sklearn.metrics.pairwise import cosine_similarity
+
 pd.set_option('display.max_rows', 500)
 pd.set_option('display.max_columns', 500)
 pd.set_option('display.width', 240)
@@ -33,6 +36,7 @@ def prepare_data(df):
     print('Removing incorrectly events.')
     df = df.replace(to_replace='None', value=np.nan).dropna(subset=['documentId'])
 
+    '''
     # binarize categories
     print('Binarizing categories')
     categories_df = df['category'].str.split('|', expand=True)
@@ -41,6 +45,8 @@ def prepare_data(df):
     for i in tqdm(categories):
         df['category_' + i] = np.where(i in categories_df, 1, 0)
     df = df.drop(['category'], axis=1)
+    df = df.fillna(1.0)
+    '''
 
     return df
 
@@ -55,3 +61,25 @@ if __name__ == '__main__':
     #Print final dataframe
     print('Printing final dataframe')
     print(df)
+
+    print(df.dtypes)
+
+    df = df.set_index('documentId')
+    per_document = df.pivot_table(index=['documentId'], aggfunc='size')
+    per_document.rename({0:'count'}, inplace=True, axis='columns')
+#    df = df.drop_duplicates(subset='documentId', keep="first")
+    df = df.loc[~df.index.duplicated(keep='first')]
+
+    df['count'] = per_document
+    print(per_document)
+    print(df)
+
+    tfidf = TfidfVectorizer()
+    df['category'] = df['category'].fillna('').str.split('|').astype('str')
+    tfidf_matrix = tfidf.fit_transform(df['category'])
+    print(tfidf.get_feature_names())
+    print(tfidf_matrix.shape)
+
+    print(np.argmax(cosine_similarity(tfidf_matrix)[1:,0]))
+
+    #df_cat_only = df.drop(['documentId', 'title', 'url', 'eventId', 'publishtime', 'userId', 'activeTime', 'time'], axis=1)
