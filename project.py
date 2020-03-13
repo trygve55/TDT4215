@@ -8,7 +8,7 @@ import pandas as pd
 import numpy as np
 
 from collaborative_filtering import user_based_collab_filtering
-from content_based import bernoulli_bayes
+from content_based import bernoulli_bayes, rank_documents_title_cosine, rank_documents_category_cosine
 
 pd.set_option('display.max_rows', 500)
 pd.set_option('display.max_columns', 500)
@@ -67,6 +67,10 @@ def pre_processing(df):
 
     # Print final dataframe
     print('Printing final dataframe')
+
+    #Filling NaN from categories
+    print('Filling NaN from categories')
+    df['category'] = df['category'].fillna("")
     print(df)
     return df
 
@@ -119,14 +123,37 @@ def evaluate(recommendations, test_set):
     print(ARHR)
     print(CTR)
 
-    
+
+def get_unique_documents(df):
+    df_documents = df.set_index('documentId')
+    df_documents = df_documents.loc[~df_documents.index.duplicated(keep='first')]
+    df_documents = df_documents.drop(columns=['eventId', 'activeTime', 'userId', 'time'])
+    return df_documents
+
+
 if __name__ == '__main__':
     #Load dataset into a Pandas dataframe
     print('Loading dataset...')
     df = load_data("active1000")
 
     df = pre_processing(df)
-    bernoulli_bayes(df)
+
+    df_documents = get_unique_documents(df)
+
+    test_document = '70a19fd7c9f6827feb3eb4f3df95121664491fa7'
+
+    document_category_cosine = rank_documents_category_cosine(df_documents, test_document)
+    document_title_cosine = rank_documents_title_cosine(df_documents, test_document)
+
+    print(np.argsort(document_category_cosine)[::-1])
+    print(np.argsort(document_title_cosine)[::-1])
+
+    top_hits = np.argsort(document_title_cosine+document_category_cosine)[::-1][:20]
+
+    print(df_documents.iloc[top_hits])
+
+
+    #bernoulli_bayes(df)
     # ratings = get_ratings_matrix(df)
     # train_set, test_set = train_test_split(ratings)
     # recommendations = user_based_collab_filtering(train_set, 20)

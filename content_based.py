@@ -4,6 +4,28 @@ from sklearn.feature_extraction.text import CountVectorizer, TfidfVectorizer
 from sklearn.metrics.pairwise import linear_kernel
 from sklearn.naive_bayes import BernoulliNB
 
+
+stop_words_norwegian = ['alle', 'andre', 'arbeid', 'at', 'av', 'bare', 'begge', 'ble', 'blei', 'bli', 'blir', 'blitt',
+                       'bort', 'bra', 'bruke', 'både', 'båe', 'da', 'de', 'deg', 'dei', 'deim', 'deira', 'deires',
+                       'dem', 'den', 'denne', 'der', 'dere', 'deres', 'det', 'dette', 'di', 'din', 'disse', 'ditt',
+                       'du', 'dykk', 'dykkar', 'då', 'eg', 'ein', 'eit', 'eitt', 'eller', 'elles', 'en', 'ene',
+                       'eneste', 'enhver', 'enn', 'er', 'et', 'ett', 'etter', 'folk', 'for', 'fordi', 'forsûke', 'fra',
+                       'få', 'før', 'fûr', 'fûrst', 'gjorde', 'gjûre', 'god', 'gå', 'ha', 'hadde', 'han', 'hans', 'har',
+                       'hennar', 'henne', 'hennes', 'her', 'hjå', 'ho', 'hoe', 'honom', 'hoss', 'hossen', 'hun', 'hva',
+                       'hvem', 'hver', 'hvilke', 'hvilken', 'hvis', 'hvor', 'hvordan', 'hvorfor', 'i', 'ikke', 'ikkje',
+                       'ingen', 'ingi', 'inkje', 'inn', 'innen', 'inni', 'ja', 'jeg', 'kan', 'kom', 'korleis', 'korso',
+                       'kun', 'kunne', 'kva', 'kvar', 'kvarhelst', 'kven', 'kvi', 'kvifor', 'lage', 'lang', 'lik',
+                       'like', 'makt', 'man', 'mange', 'me', 'med', 'medan', 'meg', 'meget', 'mellom', 'men', 'mens',
+                       'mer', 'mest', 'mi', 'min', 'mine', 'mitt', 'mot', 'mye', 'mykje', 'må', 'måte', 'navn', 'ned',
+                       'nei', 'no', 'noe', 'noen', 'noka', 'noko', 'nokon', 'nokor', 'nokre', 'ny', 'nå', 'når', 'og',
+                       'også', 'om', 'opp', 'oss', 'over', 'part', 'punkt', 'på', 'rett', 'riktig', 'samme', 'sant',
+                       'seg', 'selv', 'si', 'sia', 'sidan', 'siden', 'sin', 'sine', 'sist', 'sitt', 'sjøl', 'skal',
+                       'skulle', 'slik', 'slutt', 'so', 'som', 'somme', 'somt', 'start', 'stille', 'så', 'sånn', 'tid',
+                       'til', 'tilbake', 'tilstand', 'um', 'under', 'upp', 'ut', 'uten', 'var', 'vart', 'varte', 'ved',
+                       'verdi', 'vere', 'verte', 'vi', 'vil', 'ville', 'vite', 'vore', 'vors', 'vort', 'vår', 'være',
+                       'vært', 'vöre', 'vört', 'å']
+
+
 def train_test_split_bernoulli(df, sim):
     users = df["userId"].unique()
     users_df = df.groupby(["userId"])
@@ -15,7 +37,7 @@ def train_test_split_bernoulli(df, sim):
     categories = all_categories_vectorizer.get_feature_names()
     attribute_vectorizer = CountVectorizer(ngram_range=(1, 2), vocabulary=dict(zip(categories, range(len(categories)))))
 
-    for user in users:
+    for user in users[:50]:
         user_df = users_df.get_group(user)
         num_train = round(user_df.shape[0] * 0.8)
         user_df_train = user_df[:num_train]
@@ -99,3 +121,39 @@ def pre_process(df):
 
     train_attributes, train_class = 0, 0
     return train_attributes, train_class
+
+
+def rank_documents_popularity(df):
+    pass
+
+
+def rank_documents_title_cosine(df, documentId):
+    tf = TfidfVectorizer(
+        analyzer='word',
+        ngram_range=(1, 2),
+        min_df=10,
+        #token_pattern='(?u)\b[A-Za-z]+\b',
+        stop_words=stop_words_norwegian)
+
+    tfidf_matrix = tf.fit_transform(df['title'])
+    cosine_similarity = linear_kernel(tfidf_matrix, tfidf_matrix)
+    print(tf.get_feature_names())
+    print(tfidf_matrix.shape)
+
+    document_index = df.index.get_loc(documentId)
+
+    return cosine_similarity[:, document_index]
+
+
+
+def rank_documents_category_cosine(df_documents, documentId):
+    tf = TfidfVectorizer(analyzer='word', ngram_range=(1, 2), min_df=0)
+    print(df_documents)
+    tfidf_matrix = tf.fit_transform(df_documents['category'])
+    cosine_similarity = linear_kernel(tfidf_matrix, tfidf_matrix)
+    print(tf.get_feature_names())
+    print(tfidf_matrix.shape)
+
+    document_index = df_documents.index.get_loc(documentId)
+
+    return cosine_similarity[:, document_index]
