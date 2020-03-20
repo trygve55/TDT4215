@@ -9,7 +9,7 @@ import numpy as np
 from timeit import default_timer as timer
 
 from collaborative_filtering import user_based_collab_filtering
-from content_based import bernoulli_bayes, rank_documents_title_cosine, rank_documents_category_cosine
+from content_based import bernoulli_bayes, rank_documents_title_cosine, rank_documents_category_cosine, rank_documents_count
 
 pd.set_option('display.max_rows', 500)
 pd.set_option('display.max_columns', 500)
@@ -49,11 +49,6 @@ def pre_processing(df):
     print('Removing homepage hits from datatset')
     df.dropna(subset=["documentId"], inplace=True)
 
-    print("Removing duplicates events")
-    print(df.shape)
-    df.drop_duplicates(subset=["userId", "documentId"], inplace=True)
-    print(df.shape)
-
     print('Finding duplicates and setting same the documentId')
     df = df.sort_values(['title', 'publishtime'])
 
@@ -77,6 +72,9 @@ def pre_processing(df):
 
     df = df.sort_index()
 
+    print("Removing duplicates events")
+    df.drop_duplicates(subset=["userId", "documentId"], inplace=True)
+
     print("Adding transaction ID")
     item_ids = df['documentId'].unique().tolist()
     new_df = pd.DataFrame({'documentId': item_ids, 'tid': range(1, len(item_ids) + 1)})
@@ -98,7 +96,7 @@ def pre_processing(df):
     #Filling NaN from categories
     print('Filling NaN from categories')
     df['category'] = df['category'].fillna("")
-    print(df)
+    print(df.shape)
     return df
 
 
@@ -155,7 +153,14 @@ def evaluate(recommendations, test_set):
 
 
 def get_unique_documents(df):
-    df_documents = df.set_index('documentId')
+    print('Adding count')
+    df = df.set_index('documentId')
+    per_document = df.pivot_table(index=['documentId'], aggfunc='size')
+    per_document.rename({0: 'count'}, inplace=True, axis='columns')
+    df = df.loc[~df.index.duplicated(keep='first')]
+    df['count'] = per_document
+
+    df_documents = df #df_documents = df.set_index('documentId')
     df_documents = df_documents.loc[~df_documents.index.duplicated(keep='first')]
     df_documents = df_documents.drop(columns=['eventId', 'activeTime', 'userId', 'time'])
     return df_documents
@@ -174,11 +179,14 @@ if __name__ == '__main__':
 
     document_category_cosine = rank_documents_category_cosine(df_documents, test_document)
     document_title_cosine = rank_documents_title_cosine(df_documents, test_document)
+    document_count_rank = rank_documents_count(df_documents)
+
+    print(document_count_rank)
 
     print(np.argsort(document_category_cosine)[::-1])
     print(np.argsort(document_title_cosine)[::-1])
 
-    top_hits = np.argsort(document_title_cosine+document_category_cosine)[::-1][:20]
+    top_hits = np.argsort((document_title_cosine+document_category_cosine)*document_count_rank)[::-1][:20]
 
     print(df_documents.iloc[top_hits])
 
