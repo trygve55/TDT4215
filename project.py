@@ -6,6 +6,7 @@ from sklearn.metrics import mean_squared_error
 from tqdm import tqdm
 import pandas as pd
 import numpy as np
+from timeit import default_timer as timer
 
 from collaborative_filtering import user_based_collab_filtering
 from content_based import bernoulli_bayes, rank_documents_title_cosine, rank_documents_category_cosine
@@ -13,6 +14,7 @@ from content_based import bernoulli_bayes, rank_documents_title_cosine, rank_doc
 pd.set_option('display.max_rows', 500)
 pd.set_option('display.max_columns', 500)
 pd.set_option('display.width', 240)
+
 
 def load_data(path):
     """
@@ -47,8 +49,33 @@ def pre_processing(df):
     print('Removing homepage hits from datatset')
     df.dropna(subset=["documentId"], inplace=True)
 
-    print("Removing duplicates")
+    print("Removing duplicates events")
+    print(df.shape)
     df.drop_duplicates(subset=["userId", "documentId"], inplace=True)
+    print(df.shape)
+
+    print('Finding duplicates and setting same the documentId')
+    df = df.sort_values(['title', 'publishtime'])
+
+    title = None
+    publishtime = None
+    documentId = None
+    title_col = df.columns.get_loc('title')
+    publishtime_col = df.columns.get_loc('publishtime')
+    documentId_col = df.columns.get_loc('documentId')
+
+    for i in tqdm(range(df.shape[0])):
+        temp_title = df.iat[i, title_col]
+        temp_publishtime = df.iat[i, publishtime_col]
+        if publishtime != temp_publishtime or temp_title != title:
+            title = temp_title
+            publishtime = temp_publishtime
+            documentId = df.iat[i, documentId_col]
+            continue
+
+        df.iat[i, documentId_col] = documentId
+
+    df = df.sort_index()
 
     print("Adding transaction ID")
     item_ids = df['documentId'].unique().tolist()
@@ -74,6 +101,7 @@ def pre_processing(df):
     print(df)
     return df
 
+
 def get_ratings_matrix(df):
     num_users = df["userId"].nunique()
     num_items = df["documentId"].nunique()
@@ -93,6 +121,7 @@ def get_ratings_matrix(df):
     print(ratings)
     return ratings
 
+
 def train_test_split(ratings):
     test_set = np.zeros_like(ratings)
     train_set = np.copy(ratings)
@@ -103,6 +132,7 @@ def train_test_split(ratings):
         train_set[i, test_docs] = 0.
         test_set[i, test_docs] = 1.
     return train_set, test_set
+
 
 def evaluate(recommendations, test_set):
     recall = 0

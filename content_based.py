@@ -23,7 +23,11 @@ stop_words_norwegian = ['alle', 'andre', 'arbeid', 'at', 'av', 'bare', 'begge', 
                        'skulle', 'slik', 'slutt', 'so', 'som', 'somme', 'somt', 'start', 'stille', 'så', 'sånn', 'tid',
                        'til', 'tilbake', 'tilstand', 'um', 'under', 'upp', 'ut', 'uten', 'var', 'vart', 'varte', 'ved',
                        'verdi', 'vere', 'verte', 'vi', 'vil', 'ville', 'vite', 'vore', 'vors', 'vort', 'vår', 'være',
-                       'vært', 'vöre', 'vört', 'å']
+                       'vært', 'vöre', 'vört', 'å'#]
+                        , '000', '10', '10 000', '100', '100 000', '1000', '11', '12', '120', '13', '14',
+                        '15', '15 000', '16', '17', '18', '19', '20', '200', '2000', '21', '22', '23', '24', '25',
+                        '250', '26', '27', '28', '29', '30', '300', '32', '35', '38', '39', '40', '400', '42', '43',
+                        '45', '50', '500', '60', '600', '70', '700', '80', '90']
 
 
 def train_test_split_bernoulli(df, sim):
