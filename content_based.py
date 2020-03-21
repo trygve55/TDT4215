@@ -149,7 +149,6 @@ def rank_documents_title_cosine(df, documentId):
     return cosine_similarity[:, document_index]
 
 
-
 def rank_documents_category_cosine(df_documents, documentId):
     tf = TfidfVectorizer(analyzer='word', ngram_range=(1, 2), min_df=0)
     print(df_documents)
@@ -161,3 +160,7 @@ def rank_documents_category_cosine(df_documents, documentId):
     document_index = df_documents.index.get_loc(documentId)
 
     return cosine_similarity[:, document_index]
+
+
+def rank_documents_count(df_documents):
+    return np.log(df_documents['count'])/10 + 1
