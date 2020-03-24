@@ -6,15 +6,17 @@ from sklearn.metrics import mean_squared_error
 from tqdm import tqdm
 import pandas as pd
 import numpy as np
+from timeit import default_timer as timer
 
 import math
 
 from collaborative_filtering import user_based_collab_filtering
-from content_based import bernoulli_bayes
+from content_based import bernoulli_bayes, rank_documents_title_cosine, rank_documents_category_cosine, rank_documents_count
 
 pd.set_option('display.max_rows', 500)
 pd.set_option('display.max_columns', 500)
 pd.set_option('display.width', 240)
+
 
 def load_data(path):
     """
@@ -49,7 +51,30 @@ def pre_processing(df):
     print('Removing homepage hits from datatset')
     df.dropna(subset=["documentId"], inplace=True)
 
-    print("Removing duplicates")
+    print('Finding duplicates and setting same the documentId')
+    df = df.sort_values(['title', 'publishtime'])
+
+    title = None
+    publishtime = None
+    documentId = None
+    title_col = df.columns.get_loc('title')
+    publishtime_col = df.columns.get_loc('publishtime')
+    documentId_col = df.columns.get_loc('documentId')
+
+    for i in tqdm(range(df.shape[0])):
+        temp_title = df.iat[i, title_col]
+        temp_publishtime = df.iat[i, publishtime_col]
+        if publishtime != temp_publishtime or temp_title != title:
+            title = temp_title
+            publishtime = temp_publishtime
+            documentId = df.iat[i, documentId_col]
+            continue
+
+        df.iat[i, documentId_col] = documentId
+
+    df = df.sort_index()
+
+    print("Removing duplicates events")
     df.drop_duplicates(subset=["userId", "documentId"], inplace=True)
 
     print("Sort by user and time")
@@ -69,8 +94,13 @@ def pre_processing(df):
 
     # Print final dataframe
     print('Printing final dataframe')
-    print(df)
+
+    #Filling NaN from categories
+    print('Filling NaN from categories')
+    df['category'] = df['category'].fillna("")
+    print(df.shape)
     return df
+
 
 def get_ratings_matrix(df):
     num_users = df["userId"].nunique()
@@ -123,15 +153,52 @@ def evaluate(recommendations, test_set):
     print(ARHR)
     print(CTR)
 
-    
+
+def get_unique_documents(df):
+    print('Adding count')
+    df = df.set_index('documentId')
+    per_document = df.pivot_table(index=['documentId'], aggfunc='size')
+    per_document.rename({0: 'count'}, inplace=True, axis='columns')
+    df = df.loc[~df.index.duplicated(keep='first')]
+    df['count'] = per_document
+
+    df_documents = df #df_documents = df.set_index('documentId')
+    df_documents = df_documents.loc[~df_documents.index.duplicated(keep='first')]
+    df_documents = df_documents.drop(columns=['eventId', 'activeTime', 'userId', 'time'])
+    return df_documents
+
+
 if __name__ == '__main__':
     #Load dataset into a Pandas dataframe
     print('Loading dataset...')
     df = load_data("active1000")
     df = pre_processing(df)
 
+    ### Naive Bayes
+    # print("Naive Bayes")
     # recommendations, test_sets = bernoulli_bayes(df)
+    # evaluate(recommendations, test_sets)
+
+    ### Collaborative filtering
+    print("collab user user")
     ratings = get_ratings_matrix(df)
-    train_set, test_sets = train_test_split(ratings, item_based=True)
+    train_set, test_sets = train_test_split(ratings, item_based=False)
     recommendations = user_based_collab_filtering(train_set, 20)
     evaluate(recommendations, test_sets)
+    #
+    # df_documents = get_unique_documents(df)
+    #
+    # test_document = '70a19fd7c9f6827feb3eb4f3df95121664491fa7'
+    #
+    # document_category_cosine = rank_documents_category_cosine(df_documents, test_document)
+    # document_title_cosine = rank_documents_title_cosine(df_documents, test_document)
+    # document_count_rank = rank_documents_count(df_documents)
+    #
+    # print(document_count_rank)
+    #
+    # print(np.argsort(document_category_cosine)[::-1])
+    # print(np.argsort(document_title_cosine)[::-1])
+    #
+    # top_hits = np.argsort((document_title_cosine+document_category_cosine)*document_count_rank)[::-1][:20]
+    #
+    # print(df_documents.iloc[top_hits])
