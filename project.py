@@ -7,6 +7,8 @@ from tqdm import tqdm
 import pandas as pd
 import numpy as np
 
+import math
+
 from collaborative_filtering import user_based_collab_filtering
 from content_based import bernoulli_bayes
 
@@ -50,13 +52,13 @@ def pre_processing(df):
     print("Removing duplicates")
     df.drop_duplicates(subset=["userId", "documentId"], inplace=True)
 
-    print("Adding transaction ID")
-    item_ids = df['documentId'].unique().tolist()
-    new_df = pd.DataFrame({'documentId': item_ids, 'tid': range(1, len(item_ids) + 1)})
-    df = pd.merge(df, new_df, on='documentId', how='outer')
-
     print("Sort by user and time")
     df = df.sort_values(by=["userId", "time"])
+
+    print("Adding transaction ID")
+    item_ids = df['documentId'].unique().tolist()
+    new_df = pd.DataFrame({'documentId': item_ids, 'tid': range(len(item_ids))})
+    df = pd.merge(df, new_df, on='documentId', how='outer').sort_values(by=["userId", "time"])
 
     print("Resetting index")
     df = df.reset_index().drop(columns="index")
@@ -79,9 +81,6 @@ def get_ratings_matrix(df):
     new_user = df['userId'].values[1:] != df['userId'].values[:-1]
     new_user = np.r_[True, new_user]
     df['uid'] = np.cumsum(new_user)
-    item_ids = df['documentId'].unique().tolist()
-    new_df = pd.DataFrame({'documentId': item_ids, 'tid': range(1, len(item_ids) + 1)})
-    df = pd.merge(df, new_df, on='documentId', how='outer')
     df_ext = df[['uid', 'tid']]
 
     for row in df_ext.itertuples():
@@ -89,12 +88,15 @@ def get_ratings_matrix(df):
     print(ratings)
     return ratings
 
-def train_test_split(ratings):
+def train_test_split(ratings, item_based=False):
+    if item_based:
+        ratings = ratings.T
+
     test_set = np.zeros_like(ratings)
     train_set = np.copy(ratings)
 
     for i, user in enumerate(ratings):
-        num_test_docs = int(len(ratings[i].nonzero()[0]) * 0.2)
+        num_test_docs = math.ceil(len(ratings[i].nonzero()[0]) * 0.2)
         test_docs = np.random.choice(ratings[i].nonzero()[0], size=num_test_docs, replace=False)
         train_set[i, test_docs] = 0.
         test_set[i, test_docs] = 1.
@@ -106,8 +108,10 @@ def evaluate(recommendations, test_set):
     CTR = 0
     for user in range(recommendations.shape[0]):
         correct_recommendations = np.intersect1d(recommendations[user], test_set[user].nonzero()[0])
-        recall += len(correct_recommendations) / len(test_set[user].nonzero()[0])
-        CTR += len(correct_recommendations)
+        recall += len(correct_recommendations) / len(recommendations[user])
+
+        if len(correct_recommendations) > 0:
+            CTR += 1
 
         for correct_recommendation in correct_recommendations:
             ARHR += 1. / (recommendations[user].tolist().index(correct_recommendation) + 1)
@@ -124,10 +128,10 @@ if __name__ == '__main__':
     #Load dataset into a Pandas dataframe
     print('Loading dataset...')
     df = load_data("active1000")
-
     df = pre_processing(df)
-    bernoulli_bayes(df)
-    # ratings = get_ratings_matrix(df)
-    # train_set, test_set = train_test_split(ratings)
-    # recommendations = user_based_collab_filtering(train_set, 20)
-    # evaluate(recommendations, test_set)
+
+    # recommendations, test_sets = bernoulli_bayes(df)
+    ratings = get_ratings_matrix(df)
+    train_set, test_sets = train_test_split(ratings, item_based=True)
+    recommendations = user_based_collab_filtering(train_set, 20)
+    evaluate(recommendations, test_sets)
