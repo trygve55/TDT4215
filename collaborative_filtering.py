@@ -1,4 +1,5 @@
 import numpy as np
+from tqdm import tqdm
 from sklearn.metrics.pairwise import cosine_similarity
 
 
@@ -12,7 +13,7 @@ def user_based_collab_filtering(ratings, k):
     # print(ind_k)
 
     recommendations = np.empty((ratings.shape[0], k))
-    for user in range(ratings.shape[0]):  # Find recommendations for every user
+    for user in tqdm(range(ratings.shape[0])):  # Find recommendations for every user
         relevant_documents = []
         for document in range(ratings.shape[1]):  # Look at every document to see how relevant it is
             if ratings[user, document] == 0:  # If the user has seen the document before, it should not be recommended
