@@ -10,7 +10,7 @@ from timeit import default_timer as timer
 
 import math
 
-from collaborative_filtering import user_based_collab_filtering
+from collaborative_filtering import collaborative_filtering
 from content_based import bernoulli_bayes, rank_documents_title_cosine, rank_documents_category_cosine, rank_documents_count
 
 pd.set_option('display.max_rows', 500)
@@ -118,10 +118,8 @@ def get_ratings_matrix(df):
     print(ratings)
     return ratings
 
-def train_test_split(ratings, item_based=False):
-    if item_based:
-        ratings = ratings.T
 
+def train_test_split(ratings):
     test_set = np.zeros_like(ratings)
     train_set = np.copy(ratings)
 
@@ -131,6 +129,7 @@ def train_test_split(ratings, item_based=False):
         train_set[i, test_docs] = 0.
         test_set[i, test_docs] = 1.
     return train_set, test_set
+
 
 def evaluate(recommendations, test_set):
     recall = 0
@@ -149,9 +148,9 @@ def evaluate(recommendations, test_set):
     recall = recall / recommendations.shape[0]
     CTR = CTR / recommendations.shape[0]
     ARHR = ARHR / recommendations.shape[0]
-    print(recall)
-    print(ARHR)
-    print(CTR)
+    print("Recall: {}".format(recall))
+    print("ARHR: {}".format(ARHR))
+    print("CTR: {}".format(CTR))
 
 
 def get_unique_documents(df):
@@ -182,8 +181,8 @@ if __name__ == '__main__':
     ### Collaborative filtering
     print("collab user user")
     ratings = get_ratings_matrix(df)
-    train_set, test_sets = train_test_split(ratings, item_based=False)
-    recommendations = user_based_collab_filtering(train_set, 20)
+    train_set, test_sets = train_test_split(ratings)
+    recommendations = collaborative_filtering(train_set, 20, item_based=False)
     evaluate(recommendations, test_sets)
     #
     # df_documents = get_unique_documents(df)
