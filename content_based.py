@@ -27,11 +27,12 @@ stop_words_norwegian = ['alle', 'andre', 'arbeid', 'at', 'av', 'bare', 'begge', 
                         'skulle', 'slik', 'slutt', 'so', 'som', 'somme', 'somt', 'start', 'stille', 'så', 'sånn', 'tid',
                         'til', 'tilbake', 'tilstand', 'um', 'under', 'upp', 'ut', 'uten', 'var', 'vart', 'varte', 'ved',
                         'verdi', 'vere', 'verte', 'vi', 'vil', 'ville', 'vite', 'vore', 'vors', 'vort', 'vår', 'være',
-                        'vært', 'vöre', 'vört', 'å'  # ]
-    , '000', '10', '10 000', '100', '100 000', '1000', '11', '12', '120', '13', '14',
+                        'vært', 'vöre', 'vört', 'å',  # ]
+                        '000', '10', '10 000', '100', '100 000', '1000', '11', '12', '120', '13', '14',
                         '15', '15 000', '16', '17', '18', '19', '20', '200', '2000', '21', '22', '23', '24', '25',
                         '250', '26', '27', '28', '29', '30', '300', '32', '35', '38', '39', '40', '400', '42', '43',
-                        '45', '50', '500', '60', '600', '70', '700', '80', '90', '-']
+                        '45', '50', '500', '60', '600', '70', '700', '80', '90', '-', '(17)', '(18)', '(19)', '(26)',
+                        '(pluss)', '1', '1.', '2', '2015', '2016', '2017', '2:', '3', '4']
 
 
 def bernoulli_bayes(df, k=20):
@@ -109,8 +110,8 @@ class DocumentRanker:
 
             tfidf_matrix = tf.fit_transform(df['title'])
             self.title_cosine_similarity = linear_kernel(tfidf_matrix, tfidf_matrix)
-            print(tf.get_feature_names())
-            print(tfidf_matrix.shape)
+            #print(tf.get_feature_names())
+            #print(tfidf_matrix.shape)
 
         document_index = df.index.get_loc(documentId)
 
@@ -119,15 +120,26 @@ class DocumentRanker:
     def rank_documents_category_cosine(self, df_documents, documentId):
         if self.category_cosine_similarity is None:
             tf = TfidfVectorizer(analyzer='word', ngram_range=(1, 2), min_df=0)
-            print(df_documents)
+            #print(df_documents)
             tfidf_matrix = tf.fit_transform(df_documents['category'])
             self.category_cosine_similarity = linear_kernel(tfidf_matrix, tfidf_matrix)
-            print(tf.get_feature_names())
-            print(tfidf_matrix.shape)
+            #print(tf.get_feature_names())
+            #print(tfidf_matrix.shape)
 
         document_index = df_documents.index.get_loc(documentId)
 
         return self.category_cosine_similarity[:, document_index]
 
     def rank_documents_count(self, df_documents):
-        return np.log(df_documents['count']) / 10 + 1
+        count_rank = []
+        for document in df_documents.index:
+            count_rank.append(np.log(df_documents.at[document, 'count']) / 5 + 1)
+
+        return count_rank
+
+    def rank_document_skip(self, df_documents, documentIds):
+        skip_rank = []
+        for document in df_documents.index:
+            skip_rank.append(0 if document in documentIds else 1)
+
+        return skip_rank

@@ -6,6 +6,7 @@ from sklearn.metrics import mean_squared_error
 from tqdm import tqdm
 import pandas as pd
 import numpy as np
+from sklearn.model_selection import train_test_split as sklean_train_test_split
 from timeit import default_timer as timer
 
 import math
@@ -134,19 +135,19 @@ def evaluate(recommendations, test_set):
     recall = 0
     ARHR = 0
     CTR = 0
-    for user in range(recommendations.shape[0]):
-        correct_recommendations = np.intersect1d(recommendations[user], test_set[user].nonzero()[0])
-        recall += len(correct_recommendations) / len(recommendations[user])
+    for userId in recommendations.keys():
+        correct_recommendations = list(set(recommendations[userId]).intersection(test_set[userId]))
+        recall += len(correct_recommendations) / len(recommendations[userId])
 
         if len(correct_recommendations) > 0:
             CTR += 1
 
         for correct_recommendation in correct_recommendations:
-            ARHR += 1. / (recommendations[user].tolist().index(correct_recommendation) + 1)
+            ARHR += 1. / (recommendations[userId].index(correct_recommendation) + 1)
 
-    recall = recall / recommendations.shape[0]
-    CTR = CTR / recommendations.shape[0]
-    ARHR = ARHR / recommendations.shape[0]
+    recall = recall / len(recommendations)
+    CTR = CTR / len(recommendations)
+    ARHR = ARHR / len(recommendations)
     print("Recall: {}".format(recall))
     print("ARHR: {}".format(ARHR))
     print("CTR: {}".format(CTR))
@@ -182,19 +183,34 @@ if __name__ == '__main__':
 
     df_documents = get_unique_documents(df)
 
-    test_document = '70a19fd7c9f6827feb3eb4f3df95121664491fa7'
-
     document_ranker = DocumentRanker()
 
-    document_category_cosine = document_ranker.rank_documents_category_cosine(df_documents, test_document)
-    document_title_cosine = document_ranker.rank_documents_title_cosine(df_documents, test_document)
-    document_count_rank = document_ranker.rank_documents_count(df_documents)
+    userIds = df.userId.unique()
 
-    print(document_count_rank)
+    predicted_documentIds = {}
+    test_documentIds = {}
 
-    print(np.argsort(document_category_cosine)[::-1])
-    print(np.argsort(document_title_cosine)[::-1])
+    for userId in tqdm(userIds):
+        document_category_cosine = None
+        document_title_cosine = None
 
-    top_hits = np.argsort((document_title_cosine+document_category_cosine)*document_count_rank)[::-1][:20]
+        user_read_documents = df.loc[df['userId'] == userId]['documentId'].tolist()
 
-    print(df_documents.iloc[top_hits])
+        train_documentIds, test_documentIds[userId] = sklean_train_test_split(user_read_documents, test_size=0.2)
+
+        for documentId in train_documentIds:
+            if document_category_cosine is None:
+                document_category_cosine = document_ranker.rank_documents_category_cosine(df_documents, documentId)
+                document_title_cosine = document_ranker.rank_documents_title_cosine(df_documents, documentId)
+            else:
+                document_category_cosine += document_ranker.rank_documents_category_cosine(df_documents, documentId)
+                document_title_cosine += document_ranker.rank_documents_title_cosine(df_documents, documentId)
+
+        document_count_rank = document_ranker.rank_documents_count(df_documents)
+        document_skip_rank = document_ranker.rank_document_skip(df_documents, train_documentIds)
+
+        top_hits = np.argsort((document_title_cosine + document_category_cosine) * document_count_rank * document_skip_rank)[::-1][:len(test_documentIds[userId])]
+
+        predicted_documentIds[userId] = df_documents.iloc[top_hits].index.tolist()
+
+    evaluate(predicted_documentIds, test_documentIds)
