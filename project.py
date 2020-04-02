@@ -10,7 +10,7 @@ from timeit import default_timer as timer
 
 import math
 
-from content_based import bernoulli_bayes, rank_documents_title_cosine, rank_documents_category_cosine, rank_documents_count
+from content_based import DocumentRanker
 
 pd.set_option('display.max_rows', 500)
 pd.set_option('display.max_columns', 500)
@@ -184,9 +184,11 @@ if __name__ == '__main__':
 
     test_document = '70a19fd7c9f6827feb3eb4f3df95121664491fa7'
 
-    document_category_cosine = rank_documents_category_cosine(df_documents, test_document)
-    document_title_cosine = rank_documents_title_cosine(df_documents, test_document)
-    document_count_rank = rank_documents_count(df_documents)
+    document_ranker = DocumentRanker()
+
+    document_category_cosine = document_ranker.rank_documents_category_cosine(df_documents, test_document)
+    document_title_cosine = document_ranker.rank_documents_title_cosine(df_documents, test_document)
+    document_count_rank = document_ranker.rank_documents_count(df_documents)
 
     print(document_count_rank)
 
