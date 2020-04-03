@@ -6,12 +6,12 @@ from sklearn.metrics import mean_squared_error
 from tqdm import tqdm
 import pandas as pd
 import numpy as np
+import math
+from sklearn.model_selection import train_test_split as sklean_train_test_split
 from timeit import default_timer as timer
 
-import math
-
 from collaborative_filtering import collaborative_filtering
-from content_based import bernoulli_bayes, rank_documents_title_cosine, rank_documents_category_cosine, rank_documents_count
+from content_based import bernoulli_bayes, DocumentRanker
 
 pd.set_option('display.max_rows', 500)
 pd.set_option('display.max_columns', 500)
@@ -50,6 +50,24 @@ def pre_processing(df):
     # Remove homepage events and events without an article
     print('Removing homepage hits from datatset')
     df.dropna(subset=["documentId"], inplace=True)
+    print('Finding duplicates and setting same the documentId')
+    df = df.sort_values(['title', 'publishtime'])
+
+    title = None
+    publishtime = None
+    documentId = None
+    title_col = df.columns.get_loc('title')
+    publishtime_col = df.columns.get_loc('publishtime')
+    documentId_col = df.columns.get_loc('documentId')
+
+    for i in tqdm(range(df.shape[0])):
+        temp_title = df.iat[i, title_col]
+        temp_publishtime = df.iat[i, publishtime_col]
+        if publishtime != temp_publishtime or temp_title != title:
+            title = temp_title
+            publishtime = temp_publishtime
+            documentId = df.iat[i, documentId_col]
+            continue
 
     print('Finding duplicates and setting same the documentId')
     df = df.sort_values(['title', 'publishtime'])
@@ -138,7 +156,6 @@ def evaluate(recommendations, test_set):
     for user in range(recommendations.shape[0]):
         correct_recommendations = np.intersect1d(recommendations[user], test_set[user].nonzero()[0])
         recall += len(correct_recommendations) / len(recommendations[user])
-
         if len(correct_recommendations) > 0:
             CTR += 1
 
@@ -148,6 +165,25 @@ def evaluate(recommendations, test_set):
     recall = recall / recommendations.shape[0]
     CTR = CTR / recommendations.shape[0]
     ARHR = ARHR / recommendations.shape[0]
+    print("Recall: {}".format(recall))
+    print("ARHR: {}".format(ARHR))
+    print("CTR: {}".format(CTR))
+
+def evaluate_nearest_neighbor_classifier(recommendations, test_set):
+    recall = 0
+    ARHR = 0
+    CTR = 0
+    for userId in recommendations.keys():
+        correct_recommendations = list(set(recommendations[userId]).intersection(test_set[userId]))
+        recall += len(correct_recommendations) / len(recommendations[userId])
+        if len(correct_recommendations) > 0:
+            CTR += 1
+
+        for correct_recommendation in correct_recommendations:
+            ARHR += 1. / (recommendations[userId].index(correct_recommendation) + 1)
+    recall = recall / len(recommendations)
+    CTR = CTR / len(recommendations)
+    ARHR = ARHR / len(recommendations)
     print("Recall: {}".format(recall))
     print("ARHR: {}".format(ARHR))
     print("CTR: {}".format(CTR))
@@ -174,30 +210,50 @@ if __name__ == '__main__':
     df = pre_processing(df)
 
     ### Naive Bayes
-    # print("Naive Bayes")
-    # recommendations, test_sets = bernoulli_bayes(df)
-    # evaluate(recommendations, test_sets)
+    print("Naive Bayes")
+    recommendations, test_sets = bernoulli_bayes(df)
+    evaluate(recommendations, test_sets)
 
-    ### Collaborative filtering
-    print("collab user user")
+    ### User and item based collaborative filtering
+    # To change between user and item based set the flag when calling collaborative_filtering()
+    print("collab user / item based")
     ratings = get_ratings_matrix(df)
     train_set, test_sets = train_test_split(ratings)
     recommendations = collaborative_filtering(train_set, 20, item_based=False)
     evaluate(recommendations, test_sets)
-    #
-    # df_documents = get_unique_documents(df)
-    #
-    # test_document = '70a19fd7c9f6827feb3eb4f3df95121664491fa7'
-    #
-    # document_category_cosine = rank_documents_category_cosine(df_documents, test_document)
-    # document_title_cosine = rank_documents_title_cosine(df_documents, test_document)
-    # document_count_rank = rank_documents_count(df_documents)
-    #
-    # print(document_count_rank)
-    #
-    # print(np.argsort(document_category_cosine)[::-1])
-    # print(np.argsort(document_title_cosine)[::-1])
-    #
-    # top_hits = np.argsort((document_title_cosine+document_category_cosine)*document_count_rank)[::-1][:20]
-    #
-    # print(df_documents.iloc[top_hits])
+
+    ### Content based nearest neighbor classifier
+    print("content based nearest neighbor classifier")
+    df_documents = get_unique_documents(df)
+
+    document_ranker = DocumentRanker()
+
+    userIds = df.userId.unique()
+
+    predicted_documentIds = {}
+    test_documentIds = {}
+
+    for userId in tqdm(userIds):
+        document_category_cosine = None
+        document_title_cosine = None
+
+        user_read_documents = df.loc[df['userId'] == userId]['documentId'].tolist()
+
+        train_documentIds, test_documentIds[userId] = sklean_train_test_split(user_read_documents, test_size=0.2)
+
+        for documentId in train_documentIds:
+            if document_category_cosine is None:
+                document_category_cosine = document_ranker.rank_documents_category_cosine(df_documents, documentId)
+                document_title_cosine = document_ranker.rank_documents_title_cosine(df_documents, documentId)
+            else:
+                document_category_cosine += document_ranker.rank_documents_category_cosine(df_documents, documentId)
+                document_title_cosine += document_ranker.rank_documents_title_cosine(df_documents, documentId)
+
+        document_count_rank = document_ranker.rank_documents_count(df_documents)
+        document_skip_rank = document_ranker.rank_document_skip(df_documents, train_documentIds)
+
+        top_hits = np.argsort((document_title_cosine + document_category_cosine) * document_count_rank * document_skip_rank)[::-1][:len(test_documentIds[userId])]
+
+        predicted_documentIds[userId] = df_documents.iloc[top_hits].index.tolist()
+
+    evaluate_nearest_neighbor_classifier(predicted_documentIds, test_documentIds)
